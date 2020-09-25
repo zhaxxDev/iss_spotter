@@ -1,37 +1,42 @@
 const request = require('request');
-// iss.js
-/**
- * Makes a single API request to retrieve the lat/lng for a given IPv4 address.
- * Input:
- *   - The ip (ipv4) address (string)
- *   - A callback (to pass back an error or the lat/lng object)
- * Returns (via Callback):
- *   - An error, if any (nullable)
- *   - The lat and lng as an object (null if error). Example:
- *     { latitude: '49.27670', longitude: '-123.13000' }
- */
-// const fetchCoordsByIP = function(ip, callback) {
-//   request(`https://ipvigilante.com/json/${ip}`, (error, response, body) => {
-//     if (error) {
-//       callback(error, null);
-//       return;
-//     }
 
-//     if (response.statusCode !== 200) {
-//       callback(Error(`Status Code ${response.statusCode} when fetching Coordinates for IP: ${body}`), null);
-//       return;
-//     }
+const fetchMyIP = function(callback) {
+  request('https://api.ipify.org?format=json', (error, response, body) => {
+    if (error) return callback(error, null);
 
-//     const { latitude, longitude } = JSON.parse(body).data;
+    if (response.statusCode !== 200) {
+      callback(Error(`Status Code ${response.statusCode} when fetching IP: ${body}`), null);
+      return;
+    }
 
-//     callback(null, { latitude, longitude });
-//   });
-// };
+    const ip = JSON.parse(body).ip;
+    callback(null, ip);
+  });
+};
+
+const fetchCoordsByIP = function(ip, callback) {
+  request(`https://ipvigilante.com/json/${ip}`, (error, response, body) => {
+    if (error) {
+      callback(error, null);
+      return;
+    }
+
+    if (response.statusCode !== 200) {
+      callback(Error(`Status Code ${response.statusCode} when fetching Coordinates for IP: ${body}`), null);
+      return;
+    }
+
+    const { latitude, longitude } = JSON.parse(body).data;
+    // console.log('lat/lng data:', { latitude, longitude });
+
+    callback(null, { latitude, longitude });
+  });
+};
 
 const fetchISSFlyOverTimes = function(coords, callback) {
-  let LAT = coords.latitude;
-  let LON = coords.longitude;
-  request(`http://api.open-notify.org/iss-pass.json?lat=${LAT}&lon=${LON}`, function(error, response, body) {
+  const url = `http://api.open-notify.org/iss-pass.json?lat=${coords.latitude}&lon=${coords.longitude}`;
+
+  request(url, (error, response, body) => {
     if (error) {
       callback(error, null);
       return;
@@ -44,13 +49,30 @@ const fetchISSFlyOverTimes = function(coords, callback) {
 
     const passes = JSON.parse(body).response;
     callback(null, passes);
-
-  })
-}
-
+  });
+};
 
 
+const nextISSTimesForMyLocation = function(callback) {
+  fetchMyIP((error, ip) => {
+    if (error) {
+      return callback(error, null);
+    }
 
-module.exports = { fetchISSFlyOverTimes };
-// module.exports = { fetchCoordsByIP };
+    fetchCoordsByIP(ip, (error, loc) => {
+      if (error) {
+        return callback(error, null);
+      }
 
+      fetchISSFlyOverTimes(loc, (error, nextPasses) => {
+        if (error) {
+          return callback(error, null);
+        }
+
+        callback(null, nextPasses);
+      });
+    });
+  });
+};
+
+module.exports = { nextISSTimesForMyLocation };
